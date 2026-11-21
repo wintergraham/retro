@@ -10,16 +10,22 @@ interface Stats {
   miss: number
   combo: number
   maxCombo: number
+  /** Misses in a row right now. */
+  missStreak: number
 }
+
+const WEAK_WINDOW = 8 // seconds of history for the WEAKEST LINK badge
 
 /** Team health, per-player stats, rank and the end-of-song awards. */
 export class Scoreboard {
   health = 100
   teamCombo = 0
   stats = new Map<string, Stats>()
+  /** Song times of recent misses per player, for the rolling weakest-link window. */
+  private recentMisses = new Map<string, number[]>()
 
   constructor(private players: PlayerInfo[]) {
-    for (const p of players) this.stats.set(p.id, { perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0 })
+    for (const p of players) this.stats.set(p.id, { perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, missStreak: 0 })
   }
 
   judge(playerId: string, r: Judgement, songTime: number) {
@@ -28,16 +34,41 @@ export class Scoreboard {
     s[r]++
     if (r === 'miss') {
       s.combo = 0
+      s.missStreak++
       this.teamCombo = 0
+      const list = this.recentMisses.get(playerId) ?? []
+      list.push(songTime)
+      this.recentMisses.set(playerId, list)
     } else {
+      s.missStreak = 0
       s.combo++
       s.maxCombo = Math.max(s.maxCombo, s.combo)
       this.teamCombo++
     }
     if (r === 'miss' && songTime < GRACE) return
     // Fewer players means each miss hurts less, so a solo run is still survivable.
-    const scale = r === 'miss' ? Math.max(0.5, this.players.length / 4) : 1
+    const scale = r === 'miss' ? Math.max(0.5, this.players.length / 3) : 1
     this.health = Math.max(0, Math.min(100, this.health + HEAL[r] * scale))
+  }
+
+  /**
+   * Who's dragging the band down: most misses over the last few seconds (ties go to the longer
+   * current miss streak). Null with fewer than two players or when nobody has missed lately.
+   */
+  weakest(songTime: number): string | null {
+    if (this.players.length < 2) return null
+    let worst: string | null = null
+    let worstScore = 0
+    for (const p of this.players) {
+      const list = (this.recentMisses.get(p.id) ?? []).filter((t) => t > songTime - WEAK_WINDOW)
+      this.recentMisses.set(p.id, list)
+      const score = list.length + this.stats.get(p.id)!.missStreak * 0.01
+      if (list.length && score > worstScore) {
+        worst = p.id
+        worstScore = score
+      }
+    }
+    return worst
   }
 
   accuracy(id: string) {

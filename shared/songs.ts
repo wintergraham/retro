@@ -20,12 +20,6 @@ export interface DrumHit {
   pad: number // 0 kick, 1 snare, 2 tom
 }
 
-export interface ArpBar {
-  t: number
-  d: number
-  pattern: number[] // 3x3 grid cells (0..8) to swipe in order
-}
-
 export interface Chart {
   id: string
   title: string
@@ -40,8 +34,7 @@ export interface Chart {
   bassPath: { t: number; x: number }[] // one point per bar, x in 0..1
   drums: DrumHit[]
   hats: number[]
-  arp: Note[]
-  arpBars: ArpBar[]
+  arp: Note[] // CPU backing, not played by anyone
 }
 
 interface SongSource {
@@ -53,7 +46,6 @@ interface SongSource {
   lead: string[] // one per bar
   drums: string[] // one per bar
   bassStyle: number[][] // [semitone offset, eighths] repeated each bar
-  arpDots: (bar: number) => number
 }
 
 const NOTE_INDEX: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
@@ -73,34 +65,6 @@ function chordTones(chord: string): number[] {
   if (!m) throw new Error(`bad chord ${chord}`)
   const root = noteToMidi(`${m[1]}3`)
   return [root, root + (m[2] ? 3 : 4), root + 7]
-}
-
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-/** A path through the 3x3 grid where no segment passes over another dot's centre. */
-function makePattern(len: number, rand: () => number): number[] {
-  for (;;) {
-    const path = [Math.floor(rand() * 9)]
-    while (path.length < len) {
-      const a = path[path.length - 1]
-      const options = [...Array(9).keys()].filter((b) => {
-        if (path.includes(b)) return false
-        const ax = a % 3, ay = Math.floor(a / 3), bx = b % 3, by = Math.floor(b / 3)
-        return (ax + bx) % 2 !== 0 || (ay + by) % 2 !== 0
-      })
-      if (!options.length) break
-      path.push(options[Math.floor(rand() * options.length)])
-    }
-    if (path.length === len) return path
-  }
 }
 
 function compile(src: SongSource): Chart {
@@ -158,15 +122,12 @@ function compile(src: SongSource): Chart {
     for (let i = 0; i < 8; i++) hats.push(b * bar + i * eighth)
   })
 
-  // Arpeggio: sixteenths cycling root/3rd/5th/octave, plus a swipe pattern per bar
-  const rand = mulberry32(src.bpm * 7919 + bars)
+  // Arpeggio backing: sixteenths cycling root/3rd/5th/octave
   const arp: Note[] = []
-  const arpBars: ArpBar[] = []
   src.chords.forEach((c, b) => {
     const tones = chordTones(c).map((m) => m + 24)
     const cycle = [tones[0], tones[1], tones[2], tones[0] + 12]
     for (let i = 0; i < 16; i++) arp.push({ t: b * bar + (i * eighth) / 2, d: eighth / 2 * 0.8, midi: cycle[i % 4] })
-    arpBars.push({ t: b * bar, d: bar, pattern: makePattern(src.arpDots(b), rand) })
   })
 
   return {
@@ -184,7 +145,6 @@ function compile(src: SongSource): Chart {
     drums,
     hats,
     arp,
-    arpBars,
   }
 }
 
@@ -503,7 +463,6 @@ export const SONGS: Chart[] = [
     bpm: 120,
     ...join(sugarA, sugarB, sugarA, sugarB),
     bassStyle: [[0, 2], [7, 2], [12, 2], [7, 2]],
-    arpDots: () => 3,
   }),
   compile({
     id: 'pixel-highway',
@@ -512,7 +471,6 @@ export const SONGS: Chart[] = [
     bpm: 128,
     ...join(highwayVerse, highwayChorus, highwayVerse, highwayChorus),
     bassStyle: [[0, 1], [0, 1], [12, 1], [0, 1], [7, 1], [0, 1], [12, 1], [7, 1]],
-    arpDots: (b) => (Math.floor(b / 8) % 2 === 1 ? 4 : 3),
   }),
   compile({
     id: 'moonlit-arcade',
@@ -521,7 +479,6 @@ export const SONGS: Chart[] = [
     bpm: 100,
     ...join(moonA, moonB, moonEnd),
     bassStyle: [[0, 4], [7, 2], [12, 2]],
-    arpDots: () => 3,
   }),
   compile({
     id: 'byte-king',
@@ -530,7 +487,6 @@ export const SONGS: Chart[] = [
     bpm: 132,
     ...join(bossA, bossB, bossC, bossEnd),
     bassStyle: [[0, 1], [0, 1], [12, 1], [0, 1], [0, 1], [12, 1], [10, 1], [7, 1]],
-    arpDots: (b) => (b < 8 ? 3 : 4),
   }),
   compile({
     id: 'turbo-circuit',
@@ -539,7 +495,6 @@ export const SONGS: Chart[] = [
     bpm: 156,
     ...join(turboA, turboB, turboBreak, turboA, turboEnd),
     bassStyle: [[0, 1], [12, 1], [0, 1], [12, 1], [7, 1], [12, 1], [5, 1], [7, 1]],
-    arpDots: (b) => (b >= 16 && b < 24 ? 3 : 4),
   }),
 ]
 

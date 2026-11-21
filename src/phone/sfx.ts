@@ -5,7 +5,6 @@ const TICK: Record<ChannelId, { type: OscillatorType; hz: number }> = {
   lead: { type: 'square', hz: 1046 },
   bass: { type: 'triangle', hz: 330 },
   drums: { type: 'square', hz: 523 },
-  arp: { type: 'square', hz: 1568 },
 }
 
 /** Tiny, quiet chip SFX on the phone itself so taps feel answered without fighting the host speaker. */

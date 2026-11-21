@@ -1,12 +1,22 @@
-export const CHANNELS = ['lead', 'bass', 'drums', 'arp'] as const
+export const CHANNELS = ['lead', 'bass', 'drums'] as const
 export type ChannelId = (typeof CHANNELS)[number]
+/** Synth voices: the three player channels plus the arp, which the CPU always plays. */
+export type VoiceId = ChannelId | 'arp'
 
 export const CHANNEL_INFO: Record<ChannelId, { name: string; wave: string; game: string; color: string; howTo: string }> = {
   lead: { name: 'LEAD', wave: 'PULSE 1', game: 'Piano Tiles', color: '#ff4fa3', howTo: 'Tap the tiles as they hit the line.' },
   bass: { name: 'BASS', wave: 'TRIANGLE', game: 'Tilt Ship', color: '#3ef0ff', howTo: 'Tilt (or drag) to keep your ship on the bassline.' },
   drums: { name: 'DRUMS', wave: 'NOISE', game: 'Timing Rings', color: '#ffd23f', howTo: 'Smash a pad when its ring closes in.' },
-  arp: { name: 'ARP', wave: 'PULSE 2', game: 'Connect Dots', color: '#5dff7a', howTo: 'Swipe the dots in order before the bar ends.' },
 }
+
+/** Longer how-to shown on the ready-up card. */
+export const CHANNEL_STEPS: Record<ChannelId, string[]> = {
+  lead: ['Tiles fall down 4 lanes.', 'Tap a lane as its tile reaches the line.', 'Long tiles are long notes: one tap is enough.'],
+  bass: ['Your ship flies up the bassline.', 'Tilt the phone left and right to steer, or drag a finger.', 'Drift off the glowing core and the bass goes out of tune.'],
+  drums: ['Three pads: KICK, SNARE and TOM.', 'A ring shrinks onto a pad.', 'Hit the pad the moment its ring closes.'],
+}
+
+export const ARP_INFO = { name: 'ARP', wave: 'PULSE 2', color: '#5dff7a' }
 
 export type Judgement = 'perfect' | 'good' | 'miss'
 
@@ -47,8 +57,9 @@ export interface GameResults {
 export type ClientMsg =
   | { t: 'ping'; c: number }
   | { t: 'host:create' }
+  | { t: 'host:ready'; songId: string }
   | { t: 'host:start'; songId: string }
-  | { t: 'host:hud'; health: number; combo: number }
+  | { t: 'host:hud'; health: number; combo: number; weakest: string | null }
   | { t: 'host:end'; results: GameResults }
   | { t: 'host:lobby' }
   | { t: 'join'; code: string; name: string; playerId?: string }
@@ -56,6 +67,7 @@ export type ClientMsg =
   | { t: 'judge'; r: Judgement }
   | { t: 'bend'; v: number }
   | { t: 'calib' }
+  | { t: 'ready'; on: boolean }
 
 export type ServerMsg =
   | { t: 'pong'; c: number; s: number }
@@ -66,7 +78,8 @@ export type ServerMsg =
   | { t: 'start'; songId: string; startAt: number }
   | { t: 'judge'; playerId: string; r: Judgement }
   | { t: 'bend'; playerId: string; v: number }
-  | { t: 'hud'; health: number; combo: number }
+  | { t: 'hud'; health: number; combo: number; weakest: string | null }
+  | { t: 'ready'; songId: string; ready: string[] }
   | { t: 'end'; results: GameResults }
   | { t: 'lobby' }
   | { t: 'host-left' }

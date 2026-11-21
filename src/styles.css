@@ -49,6 +49,21 @@ body::after {
     radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
 }
 
+/* The WebGL CRT layer replaces the CSS scanlines on the host; on phones it only covers the game. */
+body.fx-gl::after,
+body:has(.game-wrap:not(.no-gl))::after {
+  display: none;
+}
+
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1000;
+}
+
 button,
 input {
   font: inherit;
@@ -328,12 +343,28 @@ a {
   background: rgba(11, 8, 32, 0.45);
 }
 
+.countdown > span {
+  animation: pop 0.25s steps(5);
+}
+
+/* Phone lead-in: a clean full-screen count that fades to let the first notes through. */
+.countdown.full {
+  background: rgba(11, 8, 32, calc(0.35 + var(--bg) * 0.65));
+  z-index: 60;
+}
+
+.countdown .small-label {
+  font-size: 22px;
+  text-shadow: 3px 3px 0 var(--pink);
+  animation: pulse 0.6s steps(2) infinite;
+}
+
 .channels {
   flex: 1;
   min-height: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.5vw;
 }
 
@@ -342,13 +373,160 @@ a {
   flex-direction: column;
   border: 4px solid var(--c);
   background: color-mix(in srgb, var(--c) 7%, var(--bg));
-  box-shadow: 0 0 24px color-mix(in srgb, var(--c) 30%, transparent), 6px 6px 0 #000;
+  box-shadow:
+    0 0 calc(24px + var(--flash, 0) * 60px) color-mix(in srgb, var(--c) calc(30% + var(--flash, 0) * 60%), transparent),
+    6px 6px 0 #000;
+  min-height: 0;
+  position: relative;
+  will-change: transform;
+}
+
+/* Filter-only so it doesn't fight the inline shake transform. */
+.channel-card.glitch {
+  animation: card-glitch 0.3s steps(4);
+  border-color: var(--red);
+}
+
+.channel-card.weakest {
+  border-color: var(--red);
+  animation: weak-pulse 0.8s steps(2) infinite;
+}
+
+.weak-badge {
+  position: absolute;
+  top: -1.4em;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0.4em 0.7em;
+  background: var(--red);
+  color: #fff;
+  font-size: clamp(10px, 1.1vw, 18px);
+  box-shadow: 4px 4px 0 #000;
+  animation: pulse 0.5s steps(2) infinite;
+  z-index: 2;
+}
+
+.channel-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0.8em;
+  font-size: clamp(14px, 1.6vw, 28px);
+  color: var(--fg);
+  min-height: 1.4em;
+}
+
+.miss-streak {
+  color: var(--red);
+  letter-spacing: 0.1em;
+  animation: pulse 0.4s steps(2) infinite;
+}
+
+.cpu-strip {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  width: 100%;
+  height: 7vh;
+  min-height: 40px;
+  padding: 0 1em;
+  border: 2px dashed color-mix(in srgb, var(--c) 60%, transparent);
+  color: var(--c);
+  font-size: 12px;
+}
+
+.cpu-strip .scope {
+  flex: 1;
+  height: 100%;
   min-height: 0;
 }
 
-.channel-card.glitch {
-  animation: glitch 0.3s steps(4);
-  border-color: var(--red);
+/* ---------- Ready-up ---------- */
+
+.host.ready-up {
+  justify-content: flex-start;
+  gap: 1.5vh;
+}
+
+.ready-title {
+  margin: 0;
+  color: var(--yellow);
+  font-size: clamp(20px, 3vw, 44px);
+  text-shadow: 4px 4px 0 var(--pink);
+}
+
+.ready-card .steps {
+  flex: 1;
+}
+
+.steps {
+  margin: 0;
+  padding: 0.6em 1em 0.6em 3.4em;
+  line-height: 1.9;
+  font-size: clamp(10px, 1vw, 16px);
+  text-align: left;
+}
+
+.steps li::marker {
+  color: var(--c);
+}
+
+.ready-flag {
+  color: var(--dim, #888);
+}
+
+.ready-flag.on {
+  color: var(--green);
+  animation: pop 0.25s steps(5);
+}
+
+.ready-card.is-ready {
+  background: color-mix(in srgb, var(--c) 16%, var(--bg));
+}
+
+.row {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+}
+
+.phone.ready-up {
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+.phone.ready-up .steps {
+  width: 100%;
+  font-size: 11px;
+  border: 2px solid color-mix(in srgb, var(--c) 40%, transparent);
+  padding: 0.8em 1em 0.8em 3.4em;
+}
+
+.ready-btn {
+  width: 100%;
+  padding: 1.1em;
+  font-size: 22px;
+  margin-top: auto;
+  border-color: var(--c);
+  color: var(--c);
+}
+
+.ready-btn.on {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--bg);
+  animation: pop 0.25s steps(5);
+}
+
+.weak-warning {
+  width: 100%;
+  padding: 6px;
+  text-align: center;
+  font-size: 10px;
+  background: var(--red);
+  color: #fff;
+  animation: pulse 0.5s steps(2) infinite;
 }
 
 .channel-head,
@@ -673,6 +851,19 @@ a {
   color: var(--c);
 }
 
+.game-wrap {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  will-change: transform;
+}
+
+/* No WebGL: CSS stands in for the glitch. */
+.game-wrap.no-gl.glitching {
+  filter: drop-shadow(calc(var(--glitch) * 5px) 0 0 rgba(255, 40, 90, 0.8)) drop-shadow(calc(var(--glitch) * -5px) 0 0 rgba(40, 230, 255, 0.8));
+}
+
 .game-canvas {
   flex: 1;
   width: 100%;
@@ -716,6 +907,18 @@ a {
   100% { transform: translate(0, 0); }
 }
 
+@keyframes card-glitch {
+  0% { filter: none; }
+  25% { filter: hue-rotate(90deg) saturate(3); }
+  50% { filter: invert(0.2) drop-shadow(6px 0 0 rgba(255, 40, 90, 0.8)); }
+  75% { filter: hue-rotate(-60deg) drop-shadow(-6px 0 0 rgba(40, 230, 255, 0.8)); }
+  100% { filter: none; }
+}
+
+@keyframes weak-pulse {
+  50% { box-shadow: 0 0 60px var(--red), 6px 6px 0 #000; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -734,7 +937,7 @@ a {
     overflow: auto;
   }
   .channels {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     min-height: 60vh;
   }
 }

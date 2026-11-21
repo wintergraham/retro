@@ -1,18 +1,27 @@
 # 8-Bit Chip Squad
 
-A party game for up to 4 phones and one big screen. The laptop/TV (**host**) plays an original
-60-second chiptune through a 4-channel WebAudio chip synth and shows a QR code. Each phone that
-joins *is* one NES-style channel and plays its own mini-game in time with the song:
+A party game for up to 3 phones and one big screen. The laptop/TV (**host**) plays an original
+60-second chiptune through a 4-voice WebAudio chip synth and shows a QR code. Each phone that
+joins *is* one NES-style channel and plays its own mini-game in time with the song (the fourth
+voice, the Pulse 2 arpeggio, is always played by the CPU):
 
 | Channel | Wave | Game |
 | --- | --- | --- |
 | LEAD | Pulse 1 | Piano Tiles: tap the falling tiles on the line |
 | BASS | Triangle | Tilt Ship: tilt (or drag) to ride the bassline; drifting bends the bass out of tune |
 | DRUMS | Noise | Timing Rings: smash KICK / SNARE / TOM as the rings close |
-| ARP | Pulse 2 | Connect Dots: swipe the numbered dots in order before the bar ends |
 
-Misses make your channel drop out of the mix and drain the team health bar. Hit zero and it's
-game over; survive and you get an S–F rank plus awards. Empty channels are played by the CPU.
+After the host picks a song, every phone shows an instruction card with a big READY button (plus
+calibration and, for bass on iPhone, the tilt permission). The song counts in once everyone's
+ready, or when the host hits START ANYWAY.
+
+Misses are meant to be heard: your channel goes sour, stutters or cuts out and crunches through a
+bitcrusher for about a beat, and the screen glitches and shakes. Team health drives the whole
+mix: as it falls, the music picks up drive, bitcrush, a closing lowpass, tape warble and (under
+30 HP) split-second dropouts, and the CRT picture warps further. The host shows each player's live
+accuracy and miss streak, and tags whoever's missed most in the last 8 seconds as the WEAKEST
+LINK (their phone is told too). Hit zero and it's game over; survive and you get an S–F rank plus
+awards. Empty channels are played by the CPU.
 
 ## Run it
 
@@ -61,7 +70,11 @@ allow tilt.
   compiled into timed charts that both the synth and the mini-games read.
 - `src/net.ts`: WebSocket plus NTP-style clock sync, so every device agrees on when the song
   started without streaming audio.
-- `src/host/`: the chip synth, scoring and the TV UI. Judgements arrive from phones; misses duck
-  that channel and the bass player's drift bends the triangle.
-- `src/phone/`: the four canvas mini-games. Phones judge their own taps locally against the
-  synced clock and only send `perfect`/`good`/`miss`.
+- `src/host/`: the chip synth, scoring and the TV UI. Judgements arrive from phones; misses wreck
+  that channel for a beat, the bass player's drift bends the triangle, and health degrades the mix.
+- `src/phone/`: the three canvas mini-games. Phones judge their own taps locally against the
+  synced clock and only send `perfect`/`good`/`miss`. Shared bits (judging, popups, screen FX
+  hooks) live in `games/common.ts`.
+- `src/fx/`: the WebGL CRT pass (curvature, scanlines, chromatic aberration, glitch, flash) and
+  the shake/glitch/flash envelopes. Phones run it over the game canvas, the host as an overlay.
+  Without WebGL it falls back to CSS scanlines; `prefers-reduced-motion` turns shake off.
