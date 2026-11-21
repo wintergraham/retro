@@ -2,6 +2,7 @@ import { WINDOW, type Judgement } from '../../../shared/protocol'
 import type { DrumHit } from '../../../shared/songs'
 import { FONT, Game, JUDGE_COLOR, Lane, grade, type GameEnv } from './common'
 import { Pixels, disc, ring } from './drums/pixels'
+import { mix } from './lead/pixels'
 
 const PADS = ['KICK', 'SNARE', 'TOM']
 const PAD_COLOR = ['#ffd23f', '#fff4c2', '#ff8a3d']
@@ -44,6 +45,8 @@ export class DrumGame extends Game {
     super(env)
     const { drums, beat } = env.chart
     this.lane = new Lane(drums)
+    // Rejoined mid-song: what already went by isn't this phone's to judge.
+    this.lane.skipUntil(env.startT - env.inputOffset)
     this.approach = Math.max(0.75, Math.min(1, beat * 2))
     const prev: (DrumHit | undefined)[] = []
     const head: DrumHit[] = []
@@ -74,6 +77,12 @@ export class DrumGame extends Game {
     this.pads[2].y = Math.max(top + this.Rmax + 24, bottomY - this.Rmax * 3.1, (top + this.Rmax + bottomY - this.Rmax * 2.1) / 2)
   }
 
+  /** Hardware keys under the screen read KICK, TOM, SNARE left to right. */
+  keyPos(i: number): [number, number] {
+    const p = this.pads[[0, 2, 1][i]]
+    return [p.x, p.y]
+  }
+
   /** The pad nearest the touch: the whole screen is the kit, so there are no dead zones. */
   private padAt(x: number, y: number) {
     let best = 0
@@ -86,7 +95,8 @@ export class DrumGame extends Game {
   }
 
   update(t: number) {
-    this.lane.expire(t, (hit) => {
+    // Taps arrive with inputOffset already removed, so run the chart on that same corrected clock.
+    this.lane.expire(t - this.env.inputOffset, (hit) => {
       const p = this.pads[hit.pad]
       this.result.set(hit, 'miss')
       this.combo = 0
@@ -103,6 +113,7 @@ export class DrumGame extends Game {
     if (t - p.tapT < DEBOUNCE) return
     p.tapT = t
     p.hitAt = now
+    this.env.voice({ pad: i })
     p.amp = 0.45
     // Oldest unjudged hit on this pad still in the window, so fast rolls are matched in order.
     let hit: DrumHit | null = null
@@ -135,7 +146,8 @@ export class DrumGame extends Game {
     }
   }
 
-  draw(g: CanvasRenderingContext2D, t: number) {
+  draw(g: CanvasRenderingContext2D, songT: number) {
+    const t = songT - this.env.inputOffset
     const now = performance.now()
     const dt = Math.min(0.05, (now - this.lastNow) / 1000)
     this.lastNow = now
@@ -265,11 +277,4 @@ export class DrumGame extends Game {
     g.globalAlpha = 1
     if (Math.random() < heat * dt * 30) this.fx.ember(Math.random() * this.w, this.h - 10, Math.random() < 0.5 ? '#ffd23f' : '#ff6a1f')
   }
-}
-
-function mix(a: string, b: string, k: number) {
-  const pa = parseInt(a.slice(1), 16)
-  const pb = parseInt(b.slice(1), 16)
-  const ch = (sh: number) => Math.round(((pa >> sh) & 255) * (1 - k) + ((pb >> sh) & 255) * k)
-  return `rgb(${ch(16)},${ch(8)},${ch(0)})`
 }

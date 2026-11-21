@@ -1,9 +1,23 @@
 import type { Award, ChannelId, GameResults, Judgement, PlayerInfo, PlayerResult } from '../../shared/protocol'
 import { resultRoast } from '../../shared/roasts'
 
-const HEAL = { perfect: 1, good: 0.4, miss: -3 }
+import type { Chart } from '../../shared/songs'
+
 const GRACE = 4 // seconds at the start where misses don't cost health
 const WEIGHT = { perfect: 1, good: 0.6, miss: 0 }
+/**
+ * Health per second one channel moves when every judgement it makes is a miss / perfect / good. Each
+ * channel's share is split by player count and spread over its own note density, so a dense chart
+ * doesn't hurt more than a sparse one: a fully idle team (any size) dies about 18s after the grace
+ * period, while roughly 60% hits or better survives the song.
+ */
+const RATE = { miss: -5.5, perfect: 2, good: 0.8 }
+
+/** Judgements per second a channel makes in this chart (bass is judged once per beat). */
+export function judgeRate(chart: Chart, ch: ChannelId) {
+  const n = ch === 'lead' ? chart.lead.length : ch === 'drums' ? chart.drums.length : Math.round(chart.duration / chart.beat)
+  return n / chart.duration
+}
 
 interface Stats {
   perfect: number
@@ -24,9 +38,15 @@ export class Scoreboard {
   stats = new Map<string, Stats>()
   /** Song times of recent misses per player, for the rolling weakest-link window. */
   private recentMisses = new Map<string, number[]>()
+  /** Health change per judgement, per player. */
+  private delta = new Map<string, Record<Judgement, number>>()
 
-  constructor(private players: PlayerInfo[]) {
-    for (const p of players) this.stats.set(p.id, { perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, missStreak: 0 })
+  constructor(private players: PlayerInfo[], chart: Chart) {
+    for (const p of players) {
+      this.stats.set(p.id, { perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, missStreak: 0 })
+      const per = 1 / (players.length * judgeRate(chart, p.channel as ChannelId))
+      this.delta.set(p.id, { perfect: RATE.perfect * per, good: RATE.good * per, miss: RATE.miss * per })
+    }
   }
 
   judge(playerId: string, r: Judgement, songTime: number) {
@@ -47,9 +67,7 @@ export class Scoreboard {
       this.teamCombo++
     }
     if (r === 'miss' && songTime < GRACE) return
-    // Fewer players means each miss hurts less, so a solo run is still survivable.
-    const scale = r === 'miss' ? Math.max(0.5, this.players.length / 3) : 1
-    this.health = Math.max(0, Math.min(100, this.health + HEAL[r] * scale))
+    this.health = Math.max(0, Math.min(100, this.health + this.delta.get(playerId)![r]))
   }
 
   /**

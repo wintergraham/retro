@@ -29,9 +29,10 @@ export class Net {
     this.ws = ws
     ws.onopen = () => {
       this.connected = true
+      // (Re)join first: anything queued while offline (judgements, host:end) needs the room to land in.
+      this.onOpen?.()
       for (const m of this.queue.splice(0)) ws.send(JSON.stringify(m))
       this.burstSync()
-      this.onOpen?.()
     }
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data) as ServerMsg

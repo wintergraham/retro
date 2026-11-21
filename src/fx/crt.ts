@@ -18,7 +18,8 @@ export const damageFromHealth = (hp: number) => {
   return x * x * (3 - 2 * x)
 }
 
-export const CURVE = { source: 0.06, overlay: 0.1 }
+// The handheld LCD is flat; only the host's overlay bulges.
+export const CURVE = { source: 0, overlay: 0.1 }
 
 const VERT = `
 attribute vec2 aPos;
@@ -53,11 +54,20 @@ vec2 warp(vec2 uv) {
 void main() {
   vec2 uv = warp(vUv);
   float g = clamp(uGlitch + uDamage * 0.25 * step(0.93, hash(vec2(floor(uTime * 6.0), 7.0))), 0.0, 1.0);
+#ifdef SOURCE
+  float tornRows = 0.55;
+  float dmgDark = 1.0;
+#else
+  // Over the host UI it has to stay readable on a TV: fewer torn rows, lighter darkening.
+  g = min(g, 0.6);
+  float tornRows = 0.3;
+  float dmgDark = 0.4;
+#endif
 
   // Torn horizontal bands: random rows slide sideways while glitching.
   float row = floor(uv.y * 28.0);
   float tick = floor(uTime * 24.0);
-  float torn = step(1.0 - g * 0.55, hash(vec2(row, tick)));
+  float torn = step(1.0 - g * tornRows, hash(vec2(row, tick)));
   uv.x += (hash(vec2(row * 1.3, tick + 1.0)) - 0.5) * 0.12 * g * torn;
 
   float ca = (0.0012 + uDamage * 0.004 + g * 0.014);
@@ -65,32 +75,45 @@ void main() {
 
   // Scanlines every ~3 css px, deeper as the cartridge dies.
   float scan = 0.5 + 0.5 * sin(gl_FragCoord.y / uPx * 3.14159 * 0.66);
-  float dark = scan * (0.18 + uDamage * 0.12);
+  float dark = scan * (0.18 + uDamage * 0.12 * dmgDark);
   vec2 v = vUv * 2.0 - 1.0;
-  dark += smoothstep(0.55, 1.45, length(v * vec2(0.9, 1.0))) * (0.6 + uDamage * 0.25);
+  dark += smoothstep(0.55, 1.45, length(v * vec2(0.9, 1.0))) * (0.6 + uDamage * 0.25 * dmgDark);
 
   // Rolling bright band and grain.
   float roll = smoothstep(0.0, 0.04, abs(fract(vUv.y * 0.5 - uTime * 0.12) - 0.5) - 0.46);
   float grain = hash(gl_FragCoord.xy / uPx + fract(uTime * 13.0) * 100.0);
-  float noiseAmt = 0.03 + uDamage * 0.1 + g * 0.35;
+  float noiseAmt = 0.03 + (uDamage * 0.1 + g * 0.35) * dmgDark;
 
   vec3 add = uFlashColor * uFlash * 0.22 * (1.0 - length(v) * 0.4);
   add += vec3(1.0) * (grain - 0.5) * noiseAmt * (grain > 0.5 ? 1.0 : 0.0);
   add += vec3(0.03, 0.05, 0.06) * roll * (1.0 + uDamage);
 
 #ifdef SOURCE
-  vec3 col;
-  col.r = texture2D(uTex, uv + vec2(ca, 0.0)).r;
-  col.g = texture2D(uTex, uv).g;
-  col.b = texture2D(uTex, uv - vec2(ca, 0.0)).b;
-  col *= 1.0 - clamp(dark, 0.0, 1.0);
-  col += add;
-  col *= 1.0 - outside;
+  // Phone games draw bright-on-dark; the handheld LCD shows that brightness as dark ink on pea green,
+  // with the soft offset ghost real LCDs have.
+  vec3 lcd = vec3(0.655, 0.706, 0.541);
+  vec3 ink = vec3(0.149, 0.2, 0.11);
+  vec3 s0;
+  s0.r = texture2D(uTex, uv + vec2(ca, 0.0)).r;
+  s0.g = texture2D(uTex, uv).g;
+  s0.b = texture2D(uTex, uv - vec2(ca, 0.0)).b;
+  vec3 s1 = texture2D(uTex, uv - vec2(3.0, -3.0) / uRes * uPx).rgb;
+  float l = smoothstep(0.1, 0.7, max(max(s0.r, s0.g), s0.b));
+  float gh = smoothstep(0.1, 0.7, max(max(s1.r, s1.g), s1.b));
+  vec3 col = mix(lcd, ink, gh * 0.2);
+  col = mix(col, ink, l);
+  // Pixel grid every 3 css px, and a slow dim as the cartridge dies.
+  vec2 cell = mod(gl_FragCoord.xy / uPx, 3.0);
+  col *= 1.0 - 0.06 * (step(cell.x, 1.0) + step(cell.y, 1.0));
+  col *= 1.0 - clamp(dark * 0.35, 0.0, 0.5);
+  col = mix(col, ink, clamp(uFlash * 0.12, 0.0, 0.2));
+  col += add * 0.5;
+  col = mix(col, lcd, outside);
   gl_FragColor = vec4(col, 1.0);
 #else
   // Over DOM we can't resample what's below, so glitch shows as coloured split fringes on torn rows.
-  add += vec3(1.0, 0.1, 0.35) * torn * g * 0.22 * step(0.5, hash(vec2(row, tick + 3.0)));
-  add += vec3(0.1, 0.9, 1.0) * torn * g * 0.22 * step(0.5, hash(vec2(row, tick + 5.0)));
+  add += vec3(1.0, 0.1, 0.35) * torn * g * 0.1 * step(0.5, hash(vec2(row, tick + 3.0)));
+  add += vec3(0.1, 0.9, 1.0) * torn * g * 0.1 * step(0.5, hash(vec2(row, tick + 5.0)));
   float a = clamp(dark + outside, 0.0, 1.0);
   gl_FragColor = vec4(max(add, 0.0) * (1.0 - outside), a);
 #endif
@@ -112,12 +135,37 @@ export function hexToRgb(hex: string): [number, number, number] {
 
 export class Crt {
   private gl: WebGLRenderingContext
-  private prog: WebGLProgram
+  private prog: WebGLProgram | null = null
   private tex: WebGLTexture | null = null
   private u: Record<string, WebGLUniformLocation | null> = {}
+  /** Mobile browsers drop GL contexts when backgrounded or under memory pressure; skip frames until it's back. */
+  private lost = false
 
   private constructor(readonly canvas: HTMLCanvasElement, gl: WebGLRenderingContext, readonly mode: 'source' | 'overlay') {
     this.gl = gl
+    this.init()
+    canvas.addEventListener('webglcontextlost', this.onLost)
+    canvas.addEventListener('webglcontextrestored', this.onRestored)
+  }
+
+  private onLost = (e: Event) => {
+    e.preventDefault()
+    this.lost = true
+  }
+
+  private onRestored = () => {
+    this.lost = false
+    this.tex = null
+    this.u = {}
+    try {
+      this.init()
+    } catch {
+      this.lost = true
+    }
+  }
+
+  private init() {
+    const { gl, mode } = this
     const compile = (type: number, src: string) => {
       const s = gl.createShader(type)!
       gl.shaderSource(s, src)
@@ -157,13 +205,14 @@ export class Crt {
   static create(canvas: HTMLCanvasElement, mode: 'source' | 'overlay'): Crt | null {
     try {
       const gl = canvas.getContext('webgl', { premultipliedAlpha: true, alpha: mode === 'overlay', antialias: false })
-      return gl ? new Crt(canvas, gl, mode) : null
+      return gl && !gl.isContextLost() ? new Crt(canvas, gl, mode) : null
     } catch {
       return null
     }
   }
 
   render(time: number, s: CrtState, source?: TexImageSource) {
+    if (this.lost) return
     const { gl, u } = this
     gl.viewport(0, 0, this.canvas.width, this.canvas.height)
     if (source && this.tex) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
@@ -180,7 +229,10 @@ export class Crt {
 
   /** Frees GL objects but keeps the context, since React may reuse the same canvas. */
   destroy() {
-    this.gl.deleteProgram(this.prog)
+    this.canvas.removeEventListener('webglcontextlost', this.onLost)
+    this.canvas.removeEventListener('webglcontextrestored', this.onRestored)
+    if (this.lost) return
+    if (this.prog) this.gl.deleteProgram(this.prog)
     if (this.tex) this.gl.deleteTexture(this.tex)
   }
 }

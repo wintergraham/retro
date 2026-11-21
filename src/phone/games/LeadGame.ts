@@ -98,6 +98,8 @@ export class LeadGame extends Game {
     this.approach = Math.max(1.05, Math.min(1.7, chart.beat * 3.2))
     // Releasing within this much of a hold's end counts as holding it through.
     this.tail = (note) => Math.min(chart.beat * 0.5, note.d * 0.3)
+    // Rejoined mid-song: what already went by isn't this phone's to judge.
+    this.lane.skipUntil(env.startT - env.inputOffset, (note) => (this.state[this.index.get(note)!] = HIT))
     this.light = mix(color, '#ffffff', 0.55)
     this.dark = mix(color, '#0b0820', 0.55)
     this.deep = mix(color, '#0b0820', 0.82)
@@ -192,6 +194,10 @@ export class LeadGame extends Game {
     }
   }
 
+  keyPos(i: number): [number, number] {
+    return [this.cx(i), this.h * HIT_Y]
+  }
+
   down(x: number, _y: number, t: number) {
     let slot = 0
     while (slot < FINGERS - 1 && this.alive[slot]) slot++
@@ -222,6 +228,7 @@ export class LeadGame extends Game {
     this.tapR[i] = r
     this.doneAt[i] = t
     const tint = r === 'perfect' ? 0 : delta < 0 ? 1 : 2
+    if (r !== 'miss') this.env.voice({ midi: note.midi, d: note.d })
     this.pressAt[note.lane] = now
     this.pressTint[note.lane] = tint
 

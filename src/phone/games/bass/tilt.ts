@@ -56,7 +56,9 @@ export class Tilt {
     if (e.beta == null || e.gamma == null) return
     const b = e.beta * D2R
     const g = e.gamma * D2R
-    const turn = screen.orientation?.angle ?? 0
+    // iOS before 16.4 has no screen.orientation, only the legacy window.orientation (-90..180).
+    const legacy = (globalThis as { orientation?: number }).orientation ?? 0
+    const turn = screen.orientation?.angle ?? (legacy + 360) % 360
     const side = turn === 90 ? -Math.sin(b) : turn === 270 ? Math.sin(b) : (turn === 180 ? -1 : 1) * Math.cos(b) * Math.sin(g)
     const deg = Math.asin(Math.max(-1, Math.min(1, side))) / D2R
     this.angle = this.filter.filter(deg, e.timeStamp || performance.now())

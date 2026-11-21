@@ -20,9 +20,11 @@ export function Scope({ analyser, color }: { analyser: AnalyserNode; color: stri
       const n = buf.length / 2
       g.clearRect(0, 0, w, h)
       g.strokeStyle = color
-      g.lineWidth = 2 * devicePixelRatio
-      g.shadowColor = color
-      g.shadowBlur = 8 * devicePixelRatio
+      g.lineWidth = 3 * devicePixelRatio
+      // LCD ink ghost rather than a neon glow.
+      g.shadowColor = 'rgba(38, 51, 28, 0.25)'
+      g.shadowOffsetX = 3 * devicePixelRatio
+      g.shadowOffsetY = 3 * devicePixelRatio
       g.beginPath()
       for (let i = 0; i < n; i++) {
         const x = (i / n) * w
@@ -36,5 +38,10 @@ export function Scope({ analyser, color }: { analyser: AnalyserNode; color: stri
     return () => cancelAnimationFrame(raf)
   }, [analyser, color])
 
-  return <canvas ref={ref} className="scope" />
+  // Absolutely placed in a box so the canvas's own pixel size never feeds back into the layout.
+  return (
+    <div className="scope-box">
+      <canvas ref={ref} className="scope" />
+    </div>
+  )
 }

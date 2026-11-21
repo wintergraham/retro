@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { CHANNEL_INFO, type ChannelId } from '../../shared/protocol'
+import { CHANNEL_INFO, type ChannelId, type Judgement } from '../../shared/protocol'
 import type { Chart } from '../../shared/songs'
 import type { Net } from '../net'
 import { CURVE, Crt, Juice, damageFromHealth, warp } from '../fx/crt'
@@ -27,9 +27,21 @@ interface Props {
   inputOffset: number
   /** Latest team health, read every frame (a ref so HUD updates don't restart the game). */
   health: { current: number }
+  /** Filled in with a handler for the hardware keys under the screen (key index, pressed, event timeStamp). */
+  keys?: { current: ((i: number, down: boolean, timeStamp: number) => void) | null }
+  /** Called every frame with what the LCD around the game shows. */
+  readout?: (r: Readout) => void
 }
 
-export function GameCanvas({ net, chart, startAt, channel, sfx, inputOffset, health }: Props) {
+export interface Readout {
+  t: number
+  last: Judgement | null
+  lastAt: number
+  /** Bass only: how far off the bassline the ship is, -1..1. */
+  drift: number
+}
+
+export function GameCanvas({ net, chart, startAt, channel, sfx, inputOffset, health, keys, readout }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const ref = useRef<HTMLCanvasElement>(null)
 
@@ -44,17 +56,27 @@ export function GameCanvas({ net, chart, startAt, channel, sfx, inputOffset, hea
     wrap.classList.toggle('no-gl', !crt)
 
     const juice = new Juice()
-    // Judging stops shortly after the last note so stray taps don't count against the team.
+    // Judging stops shortly after the last note so stray taps don't count against the team. Taps are
+    // offset-corrected; the chart clock runs inputOffset longer so a late phone still judges its last notes.
     const cutoff = chart.duration + 0.3
+    const runUntil = cutoff + Math.max(0, inputOffset)
     const songTime = () => (net.serverNow() - startAt) / 1000
+    const read: Readout = { t: 0, last: null, lastAt: 0, drift: 0 }
     const env: GameEnv = {
       chart,
       color: CHANNEL_INFO[channel].color,
       inputOffset,
+      startT: songTime(),
       judge: (r) => {
-        if (songTime() <= cutoff) net.send({ t: 'judge', r })
+        read.last = r
+        read.lastAt = performance.now()
+        if (songTime() <= runUntil) net.send({ t: 'judge', r })
       },
-      bend: (v) => net.send({ t: 'bend', v }),
+      bend: (v) => {
+        read.drift = v
+        net.send({ t: 'bend', v })
+      },
+      voice: (v) => ('pad' in v ? sfx.drum(v.pad) : sfx.note(v.midi, v.d)),
       sound: (r) => sfx.judge(channel, r),
       fx: {
         shake: (a) => juice.shake(a),
@@ -86,12 +108,21 @@ export function GameCanvas({ net, chart, startAt, channel, sfx, inputOffset, hea
 
     let raf = 0
     let last = performance.now()
+    let bassIdx = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
       const dt = Math.min(0.1, (now - last) / 1000)
       last = now
       const t = songTime()
-      if (t <= cutoff) game.update(t)
+      if (t <= runUntil) game.update(t)
+      if (channel === 'bass') {
+        // The bass phone hums its own line, bending as the ship drifts off it.
+        while (bassIdx < chart.bass.length && chart.bass[bassIdx].t + chart.bass[bassIdx].d < t) bassIdx++
+        const n = chart.bass[bassIdx]
+        sfx.bassHum(t >= 0 && t <= chart.duration && n && n.t <= t ? n.midi : null, read.drift)
+      }
+      read.t = t
+      readout?.(read)
       if (crt && bg) {
         g.fillStyle = '#0b0820'
         g.fillRect(0, 0, game.w, game.h)
@@ -121,15 +152,32 @@ export function GameCanvas({ net, chart, startAt, channel, sfx, inputOffset, hea
       const t = (ts + net.offset - startAt) / 1000 - inputOffset
       if (t > cutoff) return
       const r = view.getBoundingClientRect()
-      if (fn === 'down') view.setPointerCapture?.(e.pointerId)
+      if (fn === 'down') {
+        try {
+          view.setPointerCapture(e.pointerId)
+        } catch {}
+      }
       let px = (e.clientX - r.left) / r.width
       let py = (e.clientY - r.top) / r.height
       if (crt) [px, py] = warp(px, py, CURVE.source)
       game[fn](px * game.w, py * game.h, t)
     }
+    if (keys)
+      keys.current = (i, isDown, ts) => {
+        const t = ((ts > 0 ? ts : performance.now()) + net.offset - startAt) / 1000 - inputOffset
+        const pos = game.keyPos(i)
+        if (!pos || t > cutoff) return
+        if (isDown) game.down(pos[0], pos[1], t)
+        else game.up(pos[0], pos[1], t)
+      }
     const down = pointer('down')
     const move = pointer('move')
     const up = pointer('up')
+    // A phone that rejoined by itself after a reload hasn't had a gesture yet; the first tap unlocks its SFX
+    // (iOS only counts touchend as a gesture for audio, Android and desktop take pointerup).
+    const unlock = () => sfx.unlock()
+    view.addEventListener('touchend', unlock)
+    view.addEventListener('pointerup', unlock)
     view.addEventListener('pointerdown', down)
     view.addEventListener('pointermove', move)
     view.addEventListener('pointerup', up)
@@ -142,10 +190,14 @@ export function GameCanvas({ net, chart, startAt, channel, sfx, inputOffset, hea
       view.removeEventListener('pointermove', move)
       view.removeEventListener('pointerup', up)
       view.removeEventListener('pointercancel', up)
+      view.removeEventListener('touchend', unlock)
+      view.removeEventListener('pointerup', unlock)
       game.destroy()
       crt?.destroy()
+      sfx.humStop()
+      if (keys) keys.current = null
     }
-  }, [net, chart, startAt, channel, sfx, inputOffset, health])
+  }, [net, chart, startAt, channel, sfx, inputOffset, health, keys])
 
   return (
     <div ref={wrapRef} className="game-wrap">

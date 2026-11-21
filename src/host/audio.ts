@@ -40,8 +40,12 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a)
  */
 function clear(p: AudioParam, now: number) {
   const hold = (p as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam }).cancelAndHoldAtTime
-  if (hold) hold.call(p, now)
-  else p.cancelScheduledValues(now)
+  try {
+    if (hold) return void hold.call(p, now)
+  } catch {
+    // Chrome throws when a value curve starts at exactly `now` (two misses in one render quantum).
+  }
+  p.cancelScheduledValues(now)
 }
 
 interface Channel {

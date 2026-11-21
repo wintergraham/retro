@@ -17,9 +17,13 @@ export interface GameEnv {
   color: string
   /** Seconds this phone's taps land late relative to the host speaker (from calibration). */
   inputOffset: number
+  /** Song time when the game was created: past 0 means the phone (re)joined mid-song. */
+  startT: number
   judge(r: Judgement): void
   bend(v: number): void
   sound(r: Judgement): void
+  /** The phone's own instrument: a lead note (midi) on a good hit, or a drum pad (0 kick, 1 snare, 2 tom) on any tap. */
+  voice(v: { midi: number; d: number } | { pad: number }): void
   fx: GameFx
 }
 
@@ -64,6 +68,10 @@ export abstract class Game {
 
   abstract update(t: number): void
   abstract draw(g: CanvasRenderingContext2D, t: number): void
+  /** Where hardware key `i` under the screen presses, in game px, or null if this game has no keys. */
+  keyPos(_i: number): [number, number] | null {
+    return null
+  }
   down(_x: number, _y: number, _t: number) {}
   move(_x: number, _y: number, _t: number) {}
   up(_x: number, _y: number, _t: number) {}
@@ -119,6 +127,15 @@ export class Lane<T extends { t: number }> {
   readonly judged = new Set<T>()
 
   constructor(readonly items: T[]) {}
+
+  /** Marks everything already past `t` as done without judging it, for a phone that (re)joined mid-song. */
+  skipUntil(t: number, onSkip?: (item: T) => void) {
+    while (this.next < this.items.length && this.items[this.next].t < t - WINDOW.good) {
+      const item = this.items[this.next++]
+      this.judged.add(item)
+      onSkip?.(item)
+    }
+  }
 
   /** Auto-miss every unjudged item that has slipped out of the window. */
   expire(t: number, onMiss: (item: T) => void) {

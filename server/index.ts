@@ -16,7 +16,11 @@ interface Player extends PlayerInfo {
 
 interface Room {
   code: string
+  /** Secret the host page keeps so it can reclaim the room after a reload or a dropped connection. */
+  key: string
   host: WebSocket | null
+  /** Pending room teardown after the host dropped; cancelled if it comes back in time. */
+  hostGone: ReturnType<typeof setTimeout> | null
   players: Map<string, Player>
   phase: 'lobby' | 'ready' | 'playing' | 'results'
   start: { songId: string; startAt: number } | null
@@ -24,6 +28,9 @@ interface Room {
   /** Players who've hit READY on their instruction card. */
   ready: Set<string>
 }
+
+/** How long a room waits for its host to come back before the phones are told it's gone. */
+const HOST_GRACE_MS = 30000
 
 const rooms = new Map<string, Room>()
 const socketRoom = new WeakMap<WebSocket, { room: Room; playerId?: string }>()
@@ -72,6 +79,16 @@ function maybeStart(room: Room) {
   if (seated.length && seated.every((p) => room.ready.has(p.id))) startSong(room, room.songId)
 }
 
+function backToLobby(room: Room) {
+  room.phase = 'lobby'
+  room.start = null
+  room.ready.clear()
+  // Phones that dropped mid-song were holding their channel for a rejoin; free it now.
+  for (const p of room.players.values()) if (!p.connected) room.players.delete(p.id)
+  toPlayersOnly(room, { t: 'lobby' })
+  broadcastPlayers(room)
+}
+
 function newCode(): string {
   // No I/O/0/1 so codes are easy to read off a TV.
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -94,10 +111,38 @@ function handle(ws: WebSocket, msg: ClientMsg) {
       return send(ws, { t: 'pong', c: msg.c, s: Date.now() })
 
     case 'host:create': {
-      const room: Room = { code: newCode(), host: ws, players: new Map(), phase: 'lobby', start: null, songId: '', ready: new Set() }
+      const old = msg.resume && rooms.get(msg.resume.code)
+      if (old && old.key === msg.resume!.key) {
+        // Same host page back after a wifi blip, or a reload: take the room back instead of stranding the phones.
+        if (old.hostGone) clearTimeout(old.hostGone)
+        old.hostGone = null
+        const prev = old.host
+        old.host = ws
+        if (prev && prev !== ws) prev.close()
+        socketRoom.set(ws, { room: old })
+        send(ws, { t: 'room', code: old.code, key: old.key })
+        // A reloaded page has lost the song and the scores, so anything past ready-up restarts from the lobby.
+        if (!msg.keep && (old.phase === 'playing' || old.phase === 'results')) return backToLobby(old)
+        broadcastPlayers(old)
+        if (old.phase === 'ready') send(ws, readyMsg(old))
+        // The song may have auto-started while the host was away; the host ignores a start it's already playing.
+        if (old.phase === 'playing' && old.start) send(ws, { t: 'start', ...old.start })
+        return
+      }
+      const room: Room = {
+        code: newCode(),
+        key: Math.random().toString(36).slice(2, 12),
+        host: ws,
+        hostGone: null,
+        players: new Map(),
+        phase: 'lobby',
+        start: null,
+        songId: '',
+        ready: new Set(),
+      }
       rooms.set(room.code, room)
       socketRoom.set(ws, { room })
-      send(ws, { t: 'room', code: room.code })
+      send(ws, { t: 'room', code: room.code, key: room.key })
       return broadcastPlayers(room)
     }
 
@@ -175,19 +220,25 @@ function handle(ws: WebSocket, msg: ClientMsg) {
       return toPlayersOnly(room, { t: 'end', results: msg.results })
     case 'host:lobby':
       if (!isHost) return
-      room.phase = 'lobby'
-      room.start = null
-      room.ready.clear()
-      // Phones that dropped mid-song were holding their channel for a rejoin; free it now.
-      for (const p of room.players.values()) if (!p.connected) room.players.delete(p.id)
-      toPlayersOnly(room, { t: 'lobby' })
-      return broadcastPlayers(room)
+      return backToLobby(room)
     case 'judge':
       if (player) send(room.host, { t: 'judge', playerId: player.id, r: msg.r })
       return
     case 'bend':
       if (player) send(room.host, { t: 'bend', playerId: player.id, v: msg.v })
       return
+    case 'leave': {
+      if (!player) return
+      room.players.delete(player.id)
+      room.ready.delete(player.id)
+      socketRoom.delete(ws)
+      broadcastPlayers(room)
+      if (room.phase === 'ready') {
+        broadcastReady(room)
+        maybeStart(room)
+      }
+      return
+    }
     case 'calib': {
       if (!player || room.phase === 'playing') return
       const calibMsg: ServerMsg = { t: 'calib', playerId: player.id, startAt: Date.now() + CALIB.leadInMs }
@@ -203,8 +254,11 @@ function onClose(ws: WebSocket) {
   const { room, playerId } = ctx
   if (room.host === ws) {
     room.host = null
-    toPlayersOnly(room, { t: 'host-left' })
-    rooms.delete(room.code)
+    room.hostGone = setTimeout(() => {
+      if (room.host) return
+      toPlayersOnly(room, { t: 'host-left' })
+      rooms.delete(room.code)
+    }, HOST_GRACE_MS)
     return
   }
   const player = playerId ? room.players.get(playerId) : undefined

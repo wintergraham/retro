@@ -4,19 +4,19 @@ export type ChannelId = (typeof CHANNELS)[number]
 export type VoiceId = ChannelId | 'arp'
 
 export const CHANNEL_INFO: Record<ChannelId, { name: string; wave: string; game: string; color: string; howTo: string }> = {
-  lead: { name: 'LEAD', wave: 'PULSE 1', game: 'Piano Tiles', color: '#ff4fa3', howTo: 'Tap the tiles as they hit the line.' },
-  bass: { name: 'BASS', wave: 'TRIANGLE', game: 'Tilt Ship', color: '#3ef0ff', howTo: 'Tilt (or drag) to keep your ship on the bassline.' },
-  drums: { name: 'DRUMS', wave: 'NOISE', game: 'Timing Rings', color: '#ffd23f', howTo: 'Smash a pad when its ring closes in.' },
+  lead: { name: 'LEAD', wave: 'PULSE 1', game: 'Piano Tiles', color: '#e4572e', howTo: 'Tap the tiles as they hit the line.' },
+  bass: { name: 'BASS', wave: 'TRIANGLE', game: 'Tilt Ship', color: '#5ba35a', howTo: 'Tilt (or drag) to keep your ship on the bassline.' },
+  drums: { name: 'DRUMS', wave: 'NOISE', game: 'Timing Rings', color: '#3a8fc4', howTo: 'Smash a pad when its ring closes in.' },
 }
 
 /** Longer how-to shown on the ready-up card. */
 export const CHANNEL_STEPS: Record<ChannelId, string[]> = {
-  lead: ['Tiles fall down 4 lanes.', 'Tap a lane as its tile reaches the line.', 'Long tiles are long notes: one tap is enough.'],
+  lead: ['Tiles fall down 4 lanes.', 'Tap a lane as its tile reaches the line.', 'Long tiles are holds: keep your finger down to the end.'],
   bass: ['Your ship flies up the bassline.', 'Tilt the phone left and right to steer, or drag a finger.', 'Drift off the glowing core and the bass goes out of tune.'],
   drums: ['Three pads: KICK, SNARE and TOM.', 'A ring shrinks onto a pad.', 'Hit the pad the moment its ring closes.'],
 }
 
-export const ARP_INFO = { name: 'ARP', wave: 'PULSE 2', color: '#5dff7a' }
+export const ARP_INFO = { name: 'ARP', wave: 'PULSE 2', color: '#f3a712' }
 
 export type Judgement = 'perfect' | 'good' | 'miss'
 
@@ -57,7 +57,8 @@ export interface GameResults {
 
 export type ClientMsg =
   | { t: 'ping'; c: number }
-  | { t: 'host:create' }
+  /** `resume` reclaims a room after a host reload or dropped connection; `keep` says this page still has the game state. */
+  | { t: 'host:create'; resume?: { code: string; key: string }; keep?: boolean }
   | { t: 'host:ready'; songId: string }
   | { t: 'host:start'; songId: string }
   | { t: 'host:hud'; health: number; combo: number; weakest: string | null; roast: string | null }
@@ -69,11 +70,13 @@ export type ClientMsg =
   | { t: 'bend'; v: number }
   | { t: 'calib' }
   | { t: 'ready'; on: boolean }
+  /** The phone's LEAVE button: give the seat back for good. */
+  | { t: 'leave' }
 
 export type ServerMsg =
   | { t: 'pong'; c: number; s: number }
   | { t: 'error'; msg: string }
-  | { t: 'room'; code: string }
+  | { t: 'room'; code: string; key: string }
   | { t: 'joined'; code: string; playerId: string }
   | { t: 'players'; players: PlayerInfo[] }
   | { t: 'start'; songId: string; startAt: number }

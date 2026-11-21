@@ -1,6 +1,6 @@
 import type { Judgement } from '../../../shared/protocol'
 import { bassTrackX } from '../../../shared/songs'
-import { FONT, Game, JUDGE_COLOR } from './common'
+import { FONT, Game, JUDGE_COLOR, type GameEnv } from './common'
 import { Tilt } from './bass/tilt'
 
 const LOOKAHEAD = 2 // seconds of track above the ship
@@ -40,7 +40,8 @@ export class BassGame extends Game {
   private lastT: number | null = null
   private lastBend = 0
   private bentOff = false
-  private beat: number | null = null
+  /** Beat being averaged right now; starts at the beat the game was created in, so a late first frame still judges what it missed. */
+  private beat: number
   private devSum = 0
   private devW = 0
   private dev = 0
@@ -53,6 +54,11 @@ export class BassGame extends Game {
   private sparks: Spark[] = []
   private xs = new Float32Array(0)
   private stars = Array.from({ length: 40 }, (_, i) => ({ x: Math.random(), y: Math.random(), z: i % 3 === 0 ? 1 : 0.45 }))
+
+  constructor(env: GameEnv) {
+    super(env)
+    this.beat = Math.floor(env.startT / env.chart.beat)
+  }
 
   destroy() {
     this.tilt.destroy()
@@ -119,8 +125,7 @@ export class BassGame extends Game {
     // One judgement per beat, on the average drift across it.
     const total = Math.round(chart.duration / chart.beat)
     const beat = Math.floor(t / chart.beat)
-    if (this.beat == null) this.beat = beat
-    else if (beat !== this.beat) {
+    if (beat !== this.beat) {
       if (beat > this.beat) {
         if (this.beat >= 0 && this.beat < total) this.grade(this.devW ? this.devSum / this.devW : Infinity)
         // Whole beats without a single frame (screen locked, tab hidden) count as missed.
