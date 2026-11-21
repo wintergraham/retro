@@ -11,6 +11,11 @@ const HEAD = '#17122c'
 const STRIP_ROW = 9
 const STRIP_H = STRIP_ROW * 3 + 8
 const BLOCK = 3
+/**
+ * Drums get a wider window than the shared one: three pads to aim at under a closing ring is harder to
+ * read than a falling tile, so it forgives about 20ms more each way.
+ */
+const WIN = { perfect: WINDOW.perfect + 0.02, good: WINDOW.good + 0.035 }
 /** A second touch on the same pad this soon is a bounce, not a new stroke (a 156bpm sixteenth is 96ms). */
 const DEBOUNCE = 0.045
 
@@ -44,10 +49,11 @@ export class DrumGame extends Game {
   constructor(env: GameEnv) {
     super(env)
     const { drums, beat } = env.chart
-    this.lane = new Lane(drums)
+    this.lane = new Lane(drums, WIN)
     // Rejoined mid-song: what already went by isn't this phone's to judge.
     this.lane.skipUntil(env.startT - env.inputOffset)
-    this.approach = Math.max(0.75, Math.min(1, beat * 2))
+    // A slower ring gives more time to see which pad is next.
+    this.approach = Math.max(0.95, Math.min(1.3, beat * 2.5))
     const prev: (DrumHit | undefined)[] = []
     const head: DrumHit[] = []
     for (const h of drums) {
@@ -97,6 +103,8 @@ export class DrumGame extends Game {
   update(t: number) {
     // Taps arrive with inputOffset already removed, so run the chart on that same corrected clock.
     this.lane.expire(t - this.env.inputOffset, (hit) => {
+      // The fast repeats inside a roll are a bonus: hit them for credit, but letting them go isn't a miss.
+      if (this.quick.has(hit)) return
       const p = this.pads[hit.pad]
       this.result.set(hit, 'miss')
       this.combo = 0
@@ -117,14 +125,14 @@ export class DrumGame extends Game {
     p.amp = 0.45
     // Oldest unjudged hit on this pad still in the window, so fast rolls are matched in order.
     let hit: DrumHit | null = null
-    for (const h of this.lane.between(t - WINDOW.good, t + WINDOW.good)) {
+    for (const h of this.lane.between(t - WIN.good, t + WIN.good)) {
       if (h.pad === i && !this.lane.judged.has(h)) {
         hit = h
         break
       }
     }
     if (!hit) return
-    const r = grade(t - hit.t)
+    const r = grade(t - hit.t, WIN)
     this.lane.mark(hit)
     this.result.set(hit, r)
     if (r === 'miss') this.combo = 0
@@ -169,7 +177,7 @@ export class DrumGame extends Game {
     const ry = R * (1 - s)
     const press = Math.max(0, 1 - e / 0.12)
     const missed = now - p.missAt < 220
-    const live = this.lane.between(t - WINDOW.perfect, t + WINDOW.perfect).some((h) => h.pad === i && !this.lane.judged.has(h))
+    const live = this.lane.between(t - WIN.perfect, t + WIN.perfect).some((h) => h.pad === i && !this.lane.judged.has(h))
 
     // Cell guide: the dotted edge where rings spawn
     ring(g, p.x, p.y, Rmax, Rmax, BLOCK, '#2a2342', 1, 3)
@@ -188,7 +196,7 @@ export class DrumGame extends Game {
 
   private drawRings(g: CanvasRenderingContext2D, t: number) {
     const { R, Rmax, approach } = this
-    const hits = this.lane.between(t - WINDOW.good, t + approach)
+    const hits = this.lane.between(t - WIN.good, t + approach)
     // Furthest first so the next hit draws on top.
     for (let j = hits.length - 1; j >= 0; j--) {
       const hit = hits[j]
@@ -196,7 +204,7 @@ export class DrumGame extends Game {
       const p = this.pads[hit.pad]
       const k = (hit.t - t) / approach
       const r = R + 2 + (Rmax - R - 2) * Math.max(0, k)
-      const near = Math.abs(hit.t - t) <= WINDOW.perfect
+      const near = Math.abs(hit.t - t) <= WIN.perfect
       const color = near ? '#ffffff' : PAD_COLOR[hit.pad]
       // Fade in from the cell edge, thicken on the way in.
       g.globalAlpha = Math.min(1, (1 - k) / 0.3)

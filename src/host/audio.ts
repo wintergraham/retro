@@ -432,6 +432,15 @@ export class ChipSynth {
     for (let i = 0; i < count; i++) this.blip(1760, first + i * interval, 0.03)
   }
 
+  /** Menu sounds for the big screen: `move` through the song list, `select` a button, `back` out. */
+  ui(kind: 'move' | 'select' | 'back') {
+    const t = this.ctx.currentTime + 0.005
+    if (kind === 'move') return this.blip(1320, t, 0.03)
+    const [a, b] = kind === 'select' ? [784, 1175] : [784, 523]
+    this.blip(a, t, 0.04)
+    this.blip(b, t + 0.05, 0.06)
+  }
+
   blip(freq: number, when: number, dur: number) {
     if (when < this.ctx.currentTime) return
     const osc = this.ctx.createOscillator()

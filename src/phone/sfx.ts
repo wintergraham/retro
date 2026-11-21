@@ -179,6 +179,56 @@ export class PhoneSfx {
     this.hum = null
   }
 
+  /**
+   * Menu sounds, like a handheld's UI: `tap` a plain button, `press` a big round knob, `pick` a channel
+   * or arrow, `toggle` a rubber slot button, `back` leaving.
+   */
+  ui(kind: 'tap' | 'press' | 'pick' | 'toggle' | 'back') {
+    const ctx = this.ctx
+    if (!ctx || !this.enabled) return
+    const t = ctx.currentTime
+    if (kind === 'toggle' && this.noise) {
+      // Soft rubbery click: a sliver of filtered noise.
+      const src = ctx.createBufferSource()
+      src.buffer = this.noise
+      const f = ctx.createBiquadFilter()
+      f.type = 'bandpass'
+      f.frequency.value = 3200
+      const g = ctx.createGain()
+      g.gain.setValueAtTime(0.08, t)
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.025)
+      src.connect(f).connect(g).connect(ctx.destination)
+      src.start(t)
+      src.stop(t + 0.03)
+      return
+    }
+    if (kind === 'press') {
+      // Low thunk that drops, like a rubber dome giving way.
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(420, t)
+      osc.frequency.exponentialRampToValueAtTime(160, t + 0.05)
+      g.gain.setValueAtTime(0.09, t)
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.06)
+      osc.connect(g).connect(ctx.destination)
+      osc.start(t)
+      osc.stop(t + 0.07)
+      return
+    }
+    if (kind === 'pick') {
+      this.tone('square', 880, 0.035, 0.03, t)
+      this.tone('square', 1320, 0.05, 0.03, t + 0.04)
+      return
+    }
+    if (kind === 'back') {
+      this.tone('square', 660, 0.035, 0.03, t)
+      this.tone('square', 440, 0.06, 0.03, t + 0.04)
+      return
+    }
+    this.tone('square', 1568, 0.025, 0.025, t)
+  }
+
   /** Countdown blip; `high` for the final one. */
   blip(high = false) {
     this.tone('square', high ? 1320 : 880, 0.07, 0.03)

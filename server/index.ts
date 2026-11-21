@@ -27,6 +27,8 @@ interface Room {
   songId: string
   /** Players who've hit READY on their instruction card. */
   ready: Set<string>
+  /** First click of the latest calibration run; phones calibrating together share one run of clicks. */
+  calibAt: number
 }
 
 /** How long a room waits for its host to come back before the phones are told it's gone. */
@@ -139,6 +141,7 @@ function handle(ws: WebSocket, msg: ClientMsg) {
         start: null,
         songId: '',
         ready: new Set(),
+        calibAt: 0,
       }
       rooms.set(room.code, room)
       socketRoom.set(ws, { room })
@@ -241,7 +244,13 @@ function handle(ws: WebSocket, msg: ClientMsg) {
     }
     case 'calib': {
       if (!player || room.phase === 'playing') return
-      const calibMsg: ServerMsg = { t: 'calib', playerId: player.id, startAt: Date.now() + CALIB.leadInMs }
+      const now = Date.now()
+      // Clicks haven't started yet: join that run instead of stacking a second set of clicks on top.
+      if (room.calibAt - now > 400) return send(ws, { t: 'calib', playerId: player.id, startAt: room.calibAt })
+      // Mid-run: queue a fresh run once the current one has finished, which later requests then join.
+      const runEnd = room.calibAt + CALIB.clicks * CALIB.interval * 1000
+      room.calibAt = Math.max(now + CALIB.leadInMs, runEnd + 1200)
+      const calibMsg: ServerMsg = { t: 'calib', playerId: player.id, startAt: room.calibAt }
       send(room.host, calibMsg)
       return send(ws, calibMsg)
     }

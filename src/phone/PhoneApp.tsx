@@ -109,6 +109,25 @@ export function PhoneApp() {
   )
   useEffect(() => () => net.close(), [net])
 
+  // Every button on the shell answers with a menu sound. Game keys play the instrument instead.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const el = (e.target as Element | null)?.closest?.('button, .slider, .code-boxes, .name-field')
+      if (!el || (el as HTMLButtonElement).disabled || el.closest('.note-keys, .drum-keys')) return
+      sfx.unlock()
+      const label = el.getAttribute('aria-label') ?? el.textContent ?? ''
+      sfx.ui(
+        /leave/i.test(label) ? 'back'
+        : el.matches('.knob, .slab') ? 'press'
+        : el.matches('.pill, .lcd-arrow') ? 'pick'
+        : el.matches('.slot-btn') ? 'toggle'
+        : 'tap',
+      )
+    }
+    addEventListener('pointerdown', onDown)
+    return () => removeEventListener('pointerdown', onDown)
+  }, [sfx])
+
   const leave = (msg: string) => {
     me.current = null
     joined.current = false

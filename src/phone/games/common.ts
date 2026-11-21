@@ -40,10 +40,12 @@ export const JUDGE_COLOR: Record<Judgement, string> = { perfect: '#5dff7a', good
 
 export const FONT = '"Press Start 2P", monospace'
 
-export function grade(delta: number): Judgement {
+export function grade(delta: number, win: Window = WINDOW): Judgement {
   const d = Math.abs(delta)
-  return d <= WINDOW.perfect ? 'perfect' : d <= WINDOW.good ? 'good' : 'miss'
+  return d <= win.perfect ? 'perfect' : d <= win.good ? 'good' : 'miss'
 }
+
+export type Window = { perfect: number; good: number }
 
 interface Popup {
   text: string
@@ -126,11 +128,14 @@ export class Lane<T extends { t: number }> {
   private next = 0
   readonly judged = new Set<T>()
 
-  constructor(readonly items: T[]) {}
+  constructor(
+    readonly items: T[],
+    private win: Window = WINDOW,
+  ) {}
 
   /** Marks everything already past `t` as done without judging it, for a phone that (re)joined mid-song. */
   skipUntil(t: number, onSkip?: (item: T) => void) {
-    while (this.next < this.items.length && this.items[this.next].t < t - WINDOW.good) {
+    while (this.next < this.items.length && this.items[this.next].t < t - this.win.good) {
       const item = this.items[this.next++]
       this.judged.add(item)
       onSkip?.(item)
@@ -139,7 +144,7 @@ export class Lane<T extends { t: number }> {
 
   /** Auto-miss every unjudged item that has slipped out of the window. */
   expire(t: number, onMiss: (item: T) => void) {
-    while (this.next < this.items.length && this.items[this.next].t < t - WINDOW.good) {
+    while (this.next < this.items.length && this.items[this.next].t < t - this.win.good) {
       const item = this.items[this.next++]
       if (!this.judged.has(item)) {
         this.judged.add(item)
@@ -153,8 +158,8 @@ export class Lane<T extends { t: number }> {
     let best: T | null = null
     for (let i = this.next; i < this.items.length; i++) {
       const item = this.items[i]
-      if (item.t > t + WINDOW.good) break
-      if (this.judged.has(item) || !match(item) || Math.abs(item.t - t) > WINDOW.good) continue
+      if (item.t > t + this.win.good) break
+      if (this.judged.has(item) || !match(item) || Math.abs(item.t - t) > this.win.good) continue
       if (!best || Math.abs(item.t - t) < Math.abs(best.t - t)) best = item
     }
     return best

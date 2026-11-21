@@ -236,6 +236,7 @@ export function HostApp() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
       e.preventDefault()
+      synth.ui('move')
       setSongId((id) => {
         const i = SONGS.findIndex((s) => s.id === id)
         return SONGS[(i + (e.key === 'ArrowUp' ? -1 : 1) + SONGS.length) % SONGS.length].id
@@ -244,6 +245,17 @@ export function HostApp() {
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
   }, [phase])
+
+  // Buttons on the big screen click like a menu; the song list ticks like the arrow keys.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const el = (e.target as Element | null)?.closest?.('button')
+      if (!el || el.disabled) return
+      synth.ui(el.matches('.song-row, .round-btn') ? 'move' : /BACK/.test(el.textContent ?? '') ? 'back' : 'select')
+    }
+    addEventListener('pointerdown', onDown)
+    return () => removeEventListener('pointerdown', onDown)
+  }, [synth])
 
   const toReady = async () => {
     await synth.ctx.resume()
