@@ -23,25 +23,65 @@ accuracy and miss streak, and tags whoever's missed most in the last 8 seconds a
 LINK (their phone is told too). Hit zero and it's game over; survive and you get an S–F rank plus
 awards. Empty channels are played by the CPU.
 
-## Run it
+## Playing (the normal way)
+
+1. On a laptop or TV, open **https://chip-squad.onrender.com/host**. If it takes a minute to load,
+   that's the free server waking up; just wait.
+2. Everyone scans the QR code with their phone (or opens the site and types the 4-letter room code).
+3. Each phone picks a channel (LEAD, BASS or DRUMS). Hit **CALIB** once per phone and tap along
+   to the clicks so your taps line up with the speaker.
+4. Pick a song on the big screen (▲▼ or click), press START, then everyone hits READY.
+
+Tips: turn the laptop volume up, turn off the iPhone silent switch if you want phone sounds, and
+open the host page a few minutes before people arrive so the server is awake.
+
+## Setting up your own server (Render, free)
+
+Only needed if the link above is down or you want your own copy.
+
+1. Make a free account at [render.com](https://render.com) and sign in with GitHub.
+2. Fork this repo to your own GitHub account (the **Fork** button on GitHub).
+3. In Render, click **New → Blueprint**, pick your fork and click **Apply**. It reads
+   `render.yaml` and sets everything up (build `npm ci && npm run build`, start `npm start`).
+4. Wait for the first build (a few minutes). Your game is at
+   `https://<your-service-name>.onrender.com/host`.
+
+After that, every push to `main` redeploys automatically.
+
+### If something breaks
+
+- **Page won't load / spins forever:** the free server was asleep. Wait up to a minute and refresh.
+- **Everyone got kicked out:** a redeploy or server restart ends every room. Refresh the host page
+  to make a new room and rejoin with the new code.
+- **Still broken:** in the Render dashboard open the service and click **Manual Deploy → Clear
+  build cache & deploy**. Check the **Logs** tab for errors.
+- **Taps feel late or early:** redo CALIB on that phone. If the whole room is off (TV or Bluetooth
+  speaker), nudge **SPEAKER DELAY** on the host lobby.
+- **Tilt doesn't work on iPhone:** the page has to be on `https://`, and you need to tap allow on
+  the motion permission prompt. Reloading the page can lose that permission, so rejoin and allow it again.
+
+## Running it on your own computer
+
+You need [Node.js](https://nodejs.org) 22 or newer.
 
 ```sh
+git clone https://github.com/wintergraham/retro.git
+cd retro
 npm install
 npm run dev
 ```
 
-Open **https://localhost:5173/host** on the laptop and accept the self-signed certificate. Phones
-must be on the same wifi: scan the QR code, accept the certificate warning, and join. HTTPS is
-needed even in dev because tilt controls and screen wake lock only work in a secure context.
+Open **https://localhost:5173/host** on the laptop and accept the certificate warning. Phones must
+be on the same wifi: scan the QR code, accept the certificate warning, and join. HTTPS is needed
+even locally because tilt controls only work in a secure context.
 
-Production build:
+To run the production build yourself:
 
 ```sh
-npm run build && npm start   # serves dist/ and the WebSocket on $PORT (default 3001)
+npm run build && npm start   # serves the game and the WebSocket on $PORT (default 3001)
 ```
 
-Put HTTPS in front of it (a reverse proxy, a tunnel, or a host like Render) or iPhones won't
-allow tilt.
+Put HTTPS in front of it (a tunnel, a reverse proxy or a host like Render) or iPhones won't allow tilt.
 
 ## Sound and timing
 
@@ -53,13 +93,10 @@ allow tilt.
 - If the host's speakers are late in a way the browser can't see (TV, soundbar, Bluetooth), use
   the **SPEAKER DELAY** nudge on the host lobby.
 
-## Deploy (Render)
-
-`render.yaml` defines a free Node web service in Frankfurt (`npm ci && npm run build`, then
-`npm start`, health check `/api/info`). Render provides HTTPS and sets `PORT`.
+## Deploy notes (Render)
 
 - Free services spin down after ~15 minutes without traffic; the first request after that is a
-  cold start that can take up to a minute. Open the host page a bit before people arrive.
+  cold start that can take up to a minute.
 - Rooms live in server memory, so a restart, redeploy or spin-down ends every open room.
 
 ## How it works
