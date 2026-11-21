@@ -13,6 +13,7 @@ import {
 } from '../../shared/protocol'
 import { SONGS, songById, type Chart } from '../../shared/songs'
 import { Net } from '../net'
+import { liveRoast } from '../../shared/roasts'
 import { ChipSynth } from './audio'
 import { Scoreboard } from './scoring'
 import { Scope } from './Scope'
@@ -30,6 +31,7 @@ interface Live {
   /** Per-card shake/flash. */
   cards: Record<ChannelId, Juice>
   weakest: string | null
+  roast: { playerId: string; text: string; at: number } | null
   done: boolean
 }
 
@@ -121,7 +123,7 @@ export function HostApp() {
           case 'start': {
             const chart = songById(msg.songId)
             const roster = playersRef.current.filter((p) => p.channel)
-            live.current = { chart, board: new Scoreboard(roster), roster, lastJudge: {}, cards: newCards(), weakest: null, done: false }
+            live.current = { chart, board: new Scoreboard(roster), roster, lastJudge: {}, cards: newCards(), weakest: null, roast: null, done: false }
             synth.play(chart, (msg.startAt - net.serverNow()) / 1000)
             setResults(null)
             return setPhase('playing')
@@ -179,9 +181,15 @@ export function HostApp() {
         fx.damage = damageFromHealth(g.board.health)
       }
       g.weakest = g.board.weakest(songTime)
+      // Fresh roast whenever the weakest link changes, and every few seconds if they stay there.
+      if (!g.weakest) g.roast = null
+      else if (g.roast?.playerId !== g.weakest || now - g.roast.at > 6000) {
+        const p = g.roster.find((x) => x.id === g.weakest)
+        if (p?.channel) g.roast = { playerId: p.id, text: liveRoast(p.channel), at: now }
+      }
       if (now - lastHud > 200) {
         lastHud = now
-        net.send({ t: 'host:hud', health: g.board.health, combo: g.board.teamCombo, weakest: g.weakest })
+        net.send({ t: 'host:hud', health: g.board.health, combo: g.board.teamCombo, weakest: g.weakest, roast: g.roast?.text ?? null })
       }
       if (g.board.health <= 0) finish(false)
       else if (synth.songTime() > g.chart.duration + 0.3) finish(true)
@@ -329,6 +337,11 @@ export function HostApp() {
           <Scope analyser={synth.channels.arp.analyser} color={ARP_INFO.color} />
           <span className="dim">CPU</span>
         </div>
+        {g.roast && (
+          <div key={g.roast.at} className="roast-ticker">
+            ☠ {g.roster.find((x) => x.id === g.roast!.playerId)?.name} {g.roast.text}
+          </div>
+        )}
         <div className="progress">
           <div style={{ width: `${Math.max(0, Math.min(1, t / g.chart.duration)) * 100}%` }} />
         </div>

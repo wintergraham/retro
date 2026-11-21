@@ -36,6 +36,7 @@ export interface PlayerResult {
   miss: number
   maxCombo: number
   accuracy: number
+  roast: string
 }
 
 export interface Award {
@@ -59,7 +60,7 @@ export type ClientMsg =
   | { t: 'host:create' }
   | { t: 'host:ready'; songId: string }
   | { t: 'host:start'; songId: string }
-  | { t: 'host:hud'; health: number; combo: number; weakest: string | null }
+  | { t: 'host:hud'; health: number; combo: number; weakest: string | null; roast: string | null }
   | { t: 'host:end'; results: GameResults }
   | { t: 'host:lobby' }
   | { t: 'join'; code: string; name: string; playerId?: string }
@@ -78,7 +79,7 @@ export type ServerMsg =
   | { t: 'start'; songId: string; startAt: number }
   | { t: 'judge'; playerId: string; r: Judgement }
   | { t: 'bend'; playerId: string; v: number }
-  | { t: 'hud'; health: number; combo: number; weakest: string | null }
+  | { t: 'hud'; health: number; combo: number; weakest: string | null; roast: string | null }
   | { t: 'ready'; songId: string; ready: string[] }
   | { t: 'end'; results: GameResults }
   | { t: 'lobby' }

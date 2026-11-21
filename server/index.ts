@@ -167,7 +167,7 @@ function handle(ws: WebSocket, msg: ClientMsg) {
       if (isHost && room.phase !== 'playing') startSong(room, msg.songId)
       return
     case 'host:hud':
-      if (isHost) toPlayersOnly(room, { t: 'hud', health: msg.health, combo: msg.combo, weakest: msg.weakest })
+      if (isHost) toPlayersOnly(room, { t: 'hud', health: msg.health, combo: msg.combo, weakest: msg.weakest, roast: msg.roast })
       return
     case 'host:end':
       if (!isHost) return

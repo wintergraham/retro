@@ -1,4 +1,5 @@
 import type { Award, ChannelId, GameResults, Judgement, PlayerInfo, PlayerResult } from '../../shared/protocol'
+import { resultRoast } from '../../shared/roasts'
 
 const HEAL = { perfect: 1, good: 0.4, miss: -3 }
 const GRACE = 4 // seconds at the start where misses don't cost health
@@ -89,7 +90,17 @@ export class Scoreboard {
         miss: s.miss,
         maxCombo: s.maxCombo,
         accuracy: this.accuracy(p.id),
+        roast: '',
       }
+    })
+    // Top of the table gets a backhanded compliment, bottom gets roasted, the rest get shrugged at.
+    const ranked = [...players].sort((a, b) => b.accuracy - a.accuracy)
+    ranked.forEach((p, i) => {
+      const tier =
+        players.length === 1
+          ? p.accuracy >= 0.75 ? 'best' : p.accuracy < 0.5 ? 'worst' : 'mid'
+          : i === 0 ? 'best' : i === ranked.length - 1 ? 'worst' : 'mid'
+      p.roast = resultRoast(tier)
     })
     const accuracy = players.length ? players.reduce((a, p) => a + p.accuracy, 0) / players.length : 0
     const rank = !cleared ? 'F' : accuracy >= 0.9 ? 'S' : accuracy >= 0.78 ? 'A' : accuracy >= 0.62 ? 'B' : 'C'

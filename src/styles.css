@@ -941,3 +941,37 @@ a {
     min-height: 60vh;
   }
 }
+
+/* Friendly trash talk */
+.roast-ticker {
+  align-self: center;
+  max-width: 90%;
+  padding: 0.6em 1.2em;
+  border: 3px solid var(--red);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: clamp(12px, 1.4vw, 22px);
+  text-align: center;
+  animation: roast-in 0.35s steps(4) both;
+}
+
+.weak-roast {
+  margin-top: 4px;
+  font-size: 8px;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.score-table .roast {
+  padding-top: 0;
+  padding-bottom: 0.9em;
+  color: var(--dim, #9a93c4);
+  font-size: 0.75em;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+@keyframes roast-in {
+  from { transform: scale(1.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}

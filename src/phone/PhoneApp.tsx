@@ -53,7 +53,7 @@ export function PhoneApp() {
   const [playerId, setPlayerId] = useState('')
   const [players, setPlayers] = useState<PlayerInfo[]>([])
   const [error, setError] = useState('')
-  const [hud, setHud] = useState<{ health: number; combo: number; weakest: string | null }>({ health: 100, combo: 0, weakest: null })
+  const [hud, setHud] = useState<{ health: number; combo: number; weakest: string | null; roast: string | null }>({ health: 100, combo: 0, weakest: null, roast: null })
   const healthRef = useRef(100)
   healthRef.current = hud.health
   const [readyUp, setReadyUp] = useState<{ songId: string; ready: string[] } | null>(null)
@@ -113,12 +113,12 @@ export function PhoneApp() {
             return setPhase((p) => (p === 'join' ? p : 'ready'))
           case 'start':
             setStart({ songId: msg.songId, startAt: msg.startAt })
-            setHud({ health: 100, combo: 0, weakest: null })
+            setHud({ health: 100, combo: 0, weakest: null, roast: null })
             setCalib(null)
             setReadyUp(null)
             return setPhase('playing')
           case 'hud':
-            return setHud({ health: msg.health, combo: msg.combo, weakest: msg.weakest })
+            return setHud({ health: msg.health, combo: msg.combo, weakest: msg.weakest, roast: msg.roast })
           case 'end':
             setResults(msg.results)
             return setPhase('results')
@@ -290,7 +290,12 @@ export function PhoneApp() {
             <span className="combo">{hud.combo > 4 ? `${hud.combo} COMBO` : ''}</span>
           </div>
         </div>
-        {hud.weakest && hud.weakest === playerId && <div className="weak-warning">☠ YOU'RE THE WEAKEST LINK ☠</div>}
+        {hud.weakest && hud.weakest === playerId && (
+          <div className="weak-warning">
+            ☠ YOU'RE THE WEAKEST LINK ☠
+            {hud.roast && <div className="weak-roast">{(me.current?.name ?? 'YOU')} {hud.roast}</div>}
+          </div>
+        )}
         {channel ? (
           <GameCanvas
             net={net}

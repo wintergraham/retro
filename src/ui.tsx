@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { CHANNEL_INFO, type GameResults } from '../shared/protocol'
 import { songById } from '../shared/songs'
 
@@ -36,12 +37,17 @@ export function Results({ results, me }: { results: GameResults; me?: string }) 
       <table className="score-table">
         <tbody>
           {results.players.map((p) => (
-            <tr key={p.id} className={p.id === me ? 'mine' : ''}>
-              <td style={{ color: CHANNEL_INFO[p.channel].color }}>{CHANNEL_INFO[p.channel].name}</td>
-              <td>{p.name}</td>
-              <td>{Math.round(p.accuracy * 100)}%</td>
-              <td className="dim">{p.perfect}/{p.good}/{p.miss}</td>
-            </tr>
+            <Fragment key={p.id}>
+              <tr className={p.id === me ? 'mine' : ''}>
+                <td style={{ color: CHANNEL_INFO[p.channel].color }}>{CHANNEL_INFO[p.channel].name}</td>
+                <td>{p.name}</td>
+                <td>{Math.round(p.accuracy * 100)}%</td>
+                <td className="dim">{p.perfect}/{p.good}/{p.miss}</td>
+              </tr>
+              <tr className="roast-row">
+                <td colSpan={4} className="roast">“{p.roast}”</td>
+              </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
